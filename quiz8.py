@@ -1,6 +1,4 @@
 import os
-import threading
-import time
 from typing import Dict, List
 
 import colorama
@@ -8,16 +6,9 @@ import google.generativeai as genai
 from colorama import Fore, Style
 from dotenv import load_dotenv
 
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List
+# Unused imports like pydantic.BaseModel, threading, time, and duplicate typing.List have been removed.
 
-app = FastAPI()
-
-class QuizRequest(BaseModel):
-    topic: str
-    question_number: int
-    level: str
+# QuizRequest class has been removed.
 
 class QuizAgent:
     def __init__(self):
@@ -35,13 +26,13 @@ class QuizAgent:
 
         # Quiz settings
         self.difficulty_levels = ["beginner", "intermediate", "advanced"]
-        self.time_limits = {"beginner": 30, "intermediate": 45, "advanced": 60}
+        # self.time_limits was removed as it was only used by run_quiz
 
         # Different prompts based on difficulty level
         self.quiz_prompts = {
             "beginner": """Generate {num_questions} multiple-choice questions about {topic} in Python at {level} level.
             Each question must strictly follow this format:
-            
+
             Q1. [Conceptual Question text]
             A) [Option A]
             B) [Option B]
@@ -49,12 +40,12 @@ class QuizAgent:
             D) [Option D]
             Correct: [Correct option letter]
             Explanation: [Detailed explanation]
-            
+
             Ensure exactly {num_questions} conceptual questions are generated with correct formatting. Do not include code snippets.
             """,
             "intermediate": """Generate {num_questions} multiple-choice questions about {topic} in Python at {level} level.
             Each question must strictly follow this format:
-            
+
             Q1. [Question text]
             ```python
             [Code snippet]
@@ -65,7 +56,7 @@ class QuizAgent:
             D) [Option D]
             Correct: [Correct option letter]
             Explanation: [Detailed explanation]
-            
+
             Ensure exactly {num_questions} questions are generated with correct formatting.
             """,
             "advanced": """Generate {num_questions} multiple-choice conceptual questions about {topic} in Python at {level} level.
@@ -81,13 +72,12 @@ class QuizAgent:
 
              Ensure exactly {num_questions} conceptual questions are generated with correct formatting. Do not include code snippets.
              """
-            
         }
-    @app.post("/generate-quiz")
+
     def generate_quiz(self, topic: str, level: str, num_questions: int) -> List[Dict]:
         """Generate quiz questions using Gemini API."""
         prompt = self.quiz_prompts[level].format(topic=topic, level=level, num_questions=num_questions)
-        response = self.model.generate_content(prompt)                                #80                  
+        response = self.model.generate_content(prompt)
 
         if not response.text:
             raise Exception("Failed to generate quiz questions.")
@@ -149,7 +139,7 @@ class QuizAgent:
                     {
                         "question": question_text,
                         "code": code_snippet,
-                        "options": options,                          # add options a, b , c , d
+                        "options": options,
                         "correct": correct,
                         "explanation": explanation,
                     }
@@ -164,140 +154,5 @@ class QuizAgent:
 
         return questions
 
-    def run_quiz(self, topic: str, level: str, num_questions: int):
-        """Run an interactive quiz session with a countdown timer."""
-        print(
-            Fore.CYAN
-            + f"\nGenerating a {level} level quiz on {topic}..."
-            + Style.RESET_ALL
-        )
-        questions = self.generate_quiz(topic, level, num_questions)
-
-        if not questions:
-            print(Fore.RED + "Failed to generate quiz questions." + Style.RESET_ALL)
-            return
-
-        score = 0
-        answers = []
-        time_per_question = self.time_limits[level.lower()]
-
-        for i, q in enumerate(questions, 1):                                            #174
-            print(Fore.GREEN + f"\nQuestion {i}/{num_questions}:" + Style.RESET_ALL)
-            print(q["question"])
-
-            if q["code"]:
-                print(Fore.YELLOW + q["code"] + Style.RESET_ALL)
-
-            for opt, text in q["options"].items():
-                print(f"{opt}) {text}")
-
-            answer = None
-            timer_expired = [False]
-
-            def countdown_timer():
-                """Function to handle countdown timer."""
-                for remaining in range(time_per_question, 0, -1):
-                    if not timer_expired[0]:  
-                        print(
-                            Fore.YELLOW
-                            + f"\rTime remaining: {remaining} seconds "
-                            + Style.RESET_ALL,
-                            end="",
-                            flush=True,
-                        )
-                        time.sleep(1)
-                if not timer_expired[0]:  
-                    timer_expired[0] = True
-                    print(
-                        Fore.RED
-                        + "\nTime's up! Moving to next question..."
-                        + Style.RESET_ALL
-                    )
-
-            timer_thread = threading.Thread(target=countdown_timer)
-            timer_thread.start()
-
-            try:
-                while not timer_expired[0]:
-                    answer = (
-                        input(f"\n{Fore.CYAN}Your answer (A/B/C/D):{Style.RESET_ALL} ")
-                        .upper()
-                        .strip()
-                    )
-                    if answer in ["A", "B", "C", "D"]:
-                        timer_expired[0] = True  
-                        break
-                    else:
-                        print(
-                            Fore.RED
-                            + "Invalid choice. Please enter A, B, C, or D."
-                            + Style.RESET_ALL
-                        )
-            except KeyboardInterrupt:
-                print("\nQuiz terminated by user.")
-                return
-
-            if not answer:
-                answer = "TIMEOUT"
-
-            answers.append({"question_num": i, "user_answer": answer, "correct_answer": q["correct"], "explanation": q["explanation"]})
-
-            if answer == q["correct"]:
-                score += 1
-
-            timer_thread.join()  
-
-        print(Fore.CYAN + "\n=== Quiz Results ===" + Style.RESET_ALL)
-        print(f"Score: {score}/{num_questions}")
-        
-        print(Fore.CYAN + "\n=== Detailed Feedback ===" + Style.RESET_ALL)
-        for ans in answers:
-            print(f"\nQuestion {ans['question_num']}:")
-            print(f"Your answer: {ans['user_answer']}")
-            print(f"Correct answer: {ans['correct_answer']}")
-            print(f"Explanation: {ans['explanation']}")
-
-# if __name__ == "__main__":
-#     quiz_agent = QuizAgent()
-#     topic = input("Enter Python topic for quiz: ")
-#     level = input("Enter difficulty level: ").lower()
-#     num_questions = int(input("Enter number of questions: "))
-#     quiz_agent.run_quiz(topic, level, num_questions)
-
-
-#     }
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
-app = FastAPI()
-
-# Allow your frontend origin (adjust if needed)
-origins = [
-    "http://127.0.0.1:5500",
-    # You can add "http://localhost:5500" if you open it that way, or "*" to allow all
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,  # or use ["*"] to allow all origins (less secure)
-    allow_credentials=True,
-    allow_methods=["*"],  # allow all HTTP methods (GET, POST, OPTIONS, etc.)
-    allow_headers=["*"],  # allow all headers
-)
-
-class QuizRequest(BaseModel):
-    topic: str
-    question_number: int
-    level: str
-
-@app.post("/generate-quiz")
-def generate_quiz(data: QuizRequest):
-    quiz_agent = QuizAgent()
-    quiz_agent.run_quiz(data.topic, data.level, data.question_number)
-    # return {
-    #     "topic": data.topic,
-    #     "number_of_questions": data.question_number,
-    #     "level": data.level,
-    #     "questions": [f"Sample question {i+1}" for i in range(data.question_number)]
-    # }
+# run_quiz method has been completely removed.
+# if __name__ == "__main__": block has been completely removed.
