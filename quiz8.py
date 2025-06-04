@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-# import uvicorn # Removed for testing - Reverted
 
 app = FastAPI()
 
@@ -28,7 +27,7 @@ class ExplanationRequest(BaseModel):
 class ExplanationResponse(BaseModel):
     explanation: str
 
-class QuizResponse(BaseModel): # New response model for generate-quiz endpoint
+class QuizResponse(BaseModel):
     questions: List[Dict]
     time_limit: int
 
@@ -42,7 +41,6 @@ class QuizAgent:
         genai.configure(api_key=self.gemini_api_key)
         self.model = genai.GenerativeModel("gemini-1.5-flash")
         self.difficulty_levels = ["beginner", "intermediate", "advanced"]
-        # Added time_limits back
         self.time_limits = {"beginner": 30, "intermediate": 45, "advanced": 60}
         self.quiz_prompts = {
             "beginner": """Generate {num_questions} multiple-choice questions about {topic} in Python at {level} level.
@@ -74,19 +72,19 @@ class QuizAgent:
 
             Ensure exactly {num_questions} questions are generated with correct formatting.
             """,
-            "advanced": """Generate {num_questions} multiple-choice conceptual questions about {topic} in Python at {level} level.
-             Each question must strictly follow this format:
+            "advanced": """Generate {num_questions} challenging multiple-choice conceptual questions about {topic} in Python at an advanced level. These questions should require deeper understanding or synthesis of concepts.
+            Each question must strictly follow this format:
 
-             Q1. [Conceptual Question text]
-             A) [Option A]
-             B) [Option B]
-             C) [Option C]
-             D) [Option D]
-             Correct: [Correct option letter]
-             Explanation: [Detailed explanation]
+            Q1. [Challenging conceptual question text]
+            A) [Option A]
+            B) [Option B]
+            C) [Option C]
+            D) [Option D]
+            Correct: [Correct option letter]
+            Explanation: [Detailed explanation]
 
-             Ensure exactly {num_questions} conceptual questions are generated with correct formatting. Do not include code snippets.
-             """
+            Ensure exactly {num_questions} questions are generated with correct formatting. Do not include code snippets.
+            """
         }
 
     def generate_quiz(self, topic: str, level: str, num_questions: int) -> List[Dict]:
@@ -269,6 +267,3 @@ async def get_explanation_endpoint(data: ExplanationRequest):
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while retrieving the explanation: {e}")
-
-# if __name__ == "__main__": # Reverted
-#     uvicorn.run(app, host="0.0.0.0", port=8000) # Reverted

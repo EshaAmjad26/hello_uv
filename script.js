@@ -60,13 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.detail || `HTTP error! Status: ${response.status}`);
             }
 
-            const responseData = await response.json(); // Expect {"questions": [...], "time_limit": ...}
+            const responseData = await response.json();
 
             questions = responseData.questions;
             if (typeof responseData.time_limit === 'number' && responseData.time_limit > 0) {
                 currentQuizTimeLimit = responseData.time_limit;
             } else {
-                currentQuizTimeLimit = 30; // Fallback to default
+                currentQuizTimeLimit = 30;
                 console.warn(`Invalid or missing time_limit from backend, defaulting to ${currentQuizTimeLimit} seconds.`);
             }
 
@@ -88,24 +88,61 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function startTimer(duration, displayElement) {
-        if (questionTimerInterval) {
-            clearInterval(questionTimerInterval);
+        console.log('startTimer: Called with duration:', duration, 'and displayElement:', displayElement);
+
+        if (!displayElement) {
+            console.error('startTimer: displayElement is null or undefined!');
+            return;
         }
+        console.log('startTimer: displayElement is valid.');
+
+        if (typeof duration !== 'number' || duration <= 0) {
+            console.error('startTimer: Invalid duration:', duration);
+            // Fallback to a default if duration is invalid, to prevent timer from breaking completely
+            // duration = 30;
+            // console.warn('startTimer: Using fallback duration of 30s due to invalid input.');
+            // Alternatively, just return:
+            return;
+        }
+        console.log('startTimer: Duration is valid:', duration);
+
+        console.log('startTimer: Clearing previous timer interval ID:', questionTimerInterval);
+        clearInterval(questionTimerInterval);
+        questionTimerInterval = null; // Explicitly set to null after clearing
 
         let timeLeft = duration;
-        displayElement.textContent = `Time left: ${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        displayElement.textContent = `Time left: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        console.log('startTimer: Initial timer text set to:', displayElement.textContent);
 
         questionTimerInterval = setInterval(() => {
+            console.log('startTimer interval: timeLeft before decrement:', timeLeft);
             timeLeft--;
-            displayElement.textContent = `Time left: ${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`;
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
 
-            if (timeLeft < 0) { // Changed to < 0 to ensure 00:00 is displayed before 'Time up!'
+            // Ensure displayElement is still part of the DOM (it should be, but good for robustness)
+            if (document.body.contains(displayElement)) {
+                 displayElement.textContent = `Time left: ${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                 console.log('startTimer interval: new textContent:', displayElement.textContent);
+            } else {
+                console.warn('startTimer interval: displayElement no longer in DOM. Clearing interval.');
                 clearInterval(questionTimerInterval);
-                questionTimerInterval = null;
-                displayElement.textContent = 'Time up!';
+                return;
+            }
+
+            if (timeLeft < 0) {
+                console.log('startTimer interval: Time expired.');
+                clearInterval(questionTimerInterval);
+                questionTimerInterval = null; // Explicitly set to null
+                if (document.body.contains(displayElement)) {
+                    displayElement.textContent = 'Time up!';
+                }
                 handleNextSubmit(true);
             }
         }, 1000);
+        console.log('startTimer: New timer interval ID set:', questionTimerInterval);
     }
 
     function renderQuestion() {
@@ -123,8 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const timerDisplay = document.createElement('div');
         timerDisplay.id = 'timer-display';
         timerDisplay.classList.add('timer');
-        questionElement.appendChild(timerDisplay);
-        // Use dynamic time limit here
+        questionElement.appendChild(timerDisplay); // Appended before startTimer call
+
+        // Logging added as per subtask
+        console.log('renderQuestion: Calling startTimer with duration:', currentQuizTimeLimit, 'and element:', timerDisplay);
         startTimer(currentQuizTimeLimit, timerDisplay);
 
         const questionText = document.createElement('p');
@@ -170,35 +209,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNextSubmit(isTimerExpired = false) {
+        // Log before clearing, to see if it was already null
+        console.log('handleNextSubmit: Called. isTimerExpired:', isTimerExpired, 'Current timer ID:', questionTimerInterval);
         if (questionTimerInterval) {
             clearInterval(questionTimerInterval);
-            questionTimerInterval = null;
+            questionTimerInterval = null; // Explicitly set to null
+            console.log('handleNextSubmit: Timer interval cleared.');
+        } else {
+            console.log('handleNextSubmit: No active timer interval to clear (was already null or cleared).');
         }
 
         if (currentQuestionIndex >= questions.length) {
+            console.log('handleNextSubmit: Already past the last question. currentQuestionIndex:', currentQuestionIndex);
             return;
         }
 
         const selectedOption = document.querySelector(`input[name="question-${currentQuestionIndex}"]:checked`);
         if (selectedOption) {
             userAnswers[currentQuestionIndex] = selectedOption.value;
+            console.log('handleNextSubmit: Answer for question', currentQuestionIndex, 'stored as', selectedOption.value);
         } else {
             userAnswers[currentQuestionIndex] = null;
+            console.log('handleNextSubmit: Question', currentQuestionIndex, 'unanswered.');
         }
 
         currentQuestionIndex++;
+        console.log('handleNextSubmit: currentQuestionIndex incremented to', currentQuestionIndex);
+
         if (currentQuestionIndex < questions.length) {
+            console.log('handleNextSubmit: Rendering next question.');
             renderQuestion();
         } else {
+            console.log('handleNextSubmit: End of quiz. Showing results.');
             showResults();
         }
     }
 
     function showResults() {
+        console.log('showResults: Called. Current timer ID:', questionTimerInterval);
         if (questionTimerInterval) {
             clearInterval(questionTimerInterval);
-            questionTimerInterval = null;
+            questionTimerInterval = null; // Explicitly set to null
+            console.log('showResults: Timer interval cleared.');
+        } else {
+            console.log('showResults: No active timer interval to clear.');
         }
+
         quizContainer.innerHTML = '';
         quizContainer.style.display = 'none';
         resultsContainer.innerHTML = '';
@@ -210,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 score++;
             }
         });
+        console.log('showResults: Score calculated:', score, '/', questions.length);
 
         const scoreElement = document.createElement('h2');
         scoreElement.textContent = `Quiz Results: Your score is ${score} out of ${questions.length}`;
@@ -265,7 +322,11 @@ document.addEventListener('DOMContentLoaded', () => {
             topicInput.value = '';
             numQuestionsInput.value = '5';
             levelSelect.value = 'beginner';
-            if (questionTimerInterval) clearInterval(questionTimerInterval);
+            if (questionTimerInterval) { // Should be null already, but good practice
+                clearInterval(questionTimerInterval);
+                questionTimerInterval = null;
+            }
+            console.log('Try Another Quiz: UI reset.');
         });
         resultsContainer.appendChild(tryAgainButton);
     }
@@ -274,6 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = event.target;
         const questionIndex = parseInt(button.dataset.questionIndex, 10);
         const explanationDiv = document.getElementById(`explanation-${questionIndex}`);
+        console.log('handleShowExplanation: questionIndex:', questionIndex, 'Current display:', explanationDiv.style.display);
+
 
         if (explanationDiv.style.display === 'block' && explanationDiv.innerHTML !== 'Loading explanation...') {
             explanationDiv.style.display = 'none';
@@ -291,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
             num_questions: quizNumQuestions,
             question_index: questionIndex
         };
+        console.log('handleShowExplanation: Fetching explanation with data:', explanationRequestData);
 
         try {
             const response = await fetch('/get-explanation', {
@@ -305,6 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
             explanationDiv.textContent = data.explanation;
+            console.log('handleShowExplanation: Explanation loaded for questionIndex:', questionIndex);
 
         } catch (error) {
             console.error('Error fetching explanation:', error);
