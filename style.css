@@ -79,11 +79,12 @@ button#start-quiz-btn:hover {
 }
 
 #results-container h2,
-#quiz-container h2 {
+#quiz-container h2 { /* This h2 is for the "Quiz Questions:" title added in script.js */
     margin-top: 0;
+    margin-bottom: 15px;
+    text-align: center;
 }
 
-/* Basic styling for individual questions and options (can be expanded in script.js) */
 .question-item {
     margin-bottom: 20px;
     padding: 15px;
@@ -92,15 +93,33 @@ button#start-quiz-btn:hover {
     background-color: #f9f9f9;
 }
 
-.question-item p {
+/* Timer specific style */
+#timer-display {
+    display: block;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #d9534f; /* A shade of red for some prominence */
+    margin-bottom: 15px; /* Space below the timer */
+    text-align: right; /* Position to the right within the question item */
+}
+
+/* Question text itself - assuming it's the first <p> in .question-item */
+.question-item > p:first-of-type {
     font-weight: bold;
     margin-bottom: 10px;
 }
 
+/* Other paragraphs within question-item, if any, should be normal weight */
+.question-item > p {
+    font-weight: normal;
+    margin-bottom: 10px;
+}
+
+
 .question-item .options label {
     display: block;
     margin-bottom: 8px;
-    font-weight: normal;
+    font-weight: normal; /* Ensure option labels are normal weight */
 }
 
 .question-item .options input[type="radio"] {
@@ -124,4 +143,51 @@ button#start-quiz-btn:hover {
 .incorrect {
     color: red;
     font-weight: bold;
+}
+
+/* Styling for buttons within quiz/results if needed (next, submit, explain) */
+.question-item button, .result-item button {
+    padding: 8px 15px;
+    margin-top: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+
+.question-item button:hover, .result-item button:hover {
+    background-color: #0056b3;
+}
+
+.explain-btn { /* Specific class for explain buttons if they need different styling */
+    background-color: #6c757d; /* Grey */
+}
+
+.explain-btn:hover {
+    background-color: #5a6268;
+}
+
+#try-again-btn {
+    display: block;
+    width: auto; /* Auto width based on content */
+    padding: 10px 20px;
+    margin: 20px auto 0; /* Center it */
+    background-color: #5cb85c;
+}
+#try-again-btn:hover {
+    background-color: #4cae4c;
+}
+
+pre {
+    background-color: #eee;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto; /* Handle horizontal scroll for code */
+    font-family: monospace;
+}
+
+code {
+    font-family: monospace;
 }
