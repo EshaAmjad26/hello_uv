@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let quizNumQuestions = 0;
     let quizLevel = '';
 
+    // Timer State
+    let questionTimerInterval = null;
+    let currentQuizTimeLimit = 30; // Default time limit, will be updated from backend
+
     startQuizBtn.addEventListener('click', async () => {
         quizTopic = topicInput.value.trim();
         quizNumQuestions = parseInt(numQuestionsInput.value, 10);
@@ -40,8 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         quizContainer.innerHTML = '<p>Loading questions...</p>';
         resultsContainer.innerHTML = '';
-        quizSetupDiv.style.display = 'none'; // Hide setup
-        quizContainer.style.display = 'block'; // Show quiz area
+        quizSetupDiv.style.display = 'none';
+        quizContainer.style.display = 'block';
+        if (questionTimerInterval) clearInterval(questionTimerInterval);
 
         try {
             const response = await fetch('/generate-quiz', {
@@ -55,14 +60,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.detail || `HTTP error! Status: ${response.status}`);
             }
 
-            questions = await response.json();
-            if (!questions || questions.length === 0 || questions.length < quizNumQuestions) {
-                quizContainer.innerHTML = `<p style="color: orange;">Could not generate the requested number of questions (${quizNumQuestions}). Received ${questions.length}. Please try different parameters or a broader topic.</p>`;
-                quizSetupDiv.style.display = 'block'; // Show setup again
-                return;
+            const responseData = await response.json(); // Expect {"questions": [...], "time_limit": ...}
+
+            questions = responseData.questions;
+            if (typeof responseData.time_limit === 'number' && responseData.time_limit > 0) {
+                currentQuizTimeLimit = responseData.time_limit;
+            } else {
+                currentQuizTimeLimit = 30; // Fallback to default
+                console.warn(`Invalid or missing time_limit from backend, defaulting to ${currentQuizTimeLimit} seconds.`);
             }
 
-            // Adjust quizNumQuestions if API returned fewer than requested but some questions
+            if (!questions || questions.length === 0 || questions.length < quizNumQuestions) {
+                quizContainer.innerHTML = `<p style="color: orange;">Could not generate the requested number of questions (${quizNumQuestions}). Received ${questions.length}. Please try different parameters or a broader topic.</p>`;
+                quizSetupDiv.style.display = 'block';
+                return;
+            }
             quizNumQuestions = questions.length;
 
             currentQuestionIndex = 0;
@@ -71,12 +83,33 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error starting quiz:', error);
             quizContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
-            quizSetupDiv.style.display = 'block'; // Show setup again on error
+            quizSetupDiv.style.display = 'block';
         }
     });
 
+    function startTimer(duration, displayElement) {
+        if (questionTimerInterval) {
+            clearInterval(questionTimerInterval);
+        }
+
+        let timeLeft = duration;
+        displayElement.textContent = `Time left: ${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`;
+
+        questionTimerInterval = setInterval(() => {
+            timeLeft--;
+            displayElement.textContent = `Time left: ${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`;
+
+            if (timeLeft < 0) { // Changed to < 0 to ensure 00:00 is displayed before 'Time up!'
+                clearInterval(questionTimerInterval);
+                questionTimerInterval = null;
+                displayElement.textContent = 'Time up!';
+                handleNextSubmit(true);
+            }
+        }, 1000);
+    }
+
     function renderQuestion() {
-        quizContainer.innerHTML = ''; // Clear previous question
+        quizContainer.innerHTML = '';
 
         if (currentQuestionIndex >= questions.length) {
             showResults();
@@ -87,6 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const questionElement = document.createElement('div');
         questionElement.classList.add('question-item');
 
+        const timerDisplay = document.createElement('div');
+        timerDisplay.id = 'timer-display';
+        timerDisplay.classList.add('timer');
+        questionElement.appendChild(timerDisplay);
+        // Use dynamic time limit here
+        startTimer(currentQuizTimeLimit, timerDisplay);
+
         const questionText = document.createElement('p');
         questionText.innerHTML = `<strong>Question ${currentQuestionIndex + 1}/${questions.length}:</strong> ${questionData.question}`;
         questionElement.appendChild(questionText);
@@ -94,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (questionData.code && questionData.code.trim() !== "") {
             const codeElement = document.createElement('pre');
             const codeTag = document.createElement('code');
-            // Basic escaping for HTML, though backend should ideally provide clean code
             codeTag.textContent = questionData.code;
             codeElement.appendChild(codeTag);
             questionElement.appendChild(codeElement);
@@ -124,18 +163,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             nextButton.textContent = 'Next Question';
         }
-        nextButton.addEventListener('click', handleNextSubmit);
+        nextButton.addEventListener('click', () => handleNextSubmit(false));
         questionElement.appendChild(nextButton);
 
         quizContainer.appendChild(questionElement);
     }
 
-    function handleNextSubmit() {
+    function handleNextSubmit(isTimerExpired = false) {
+        if (questionTimerInterval) {
+            clearInterval(questionTimerInterval);
+            questionTimerInterval = null;
+        }
+
+        if (currentQuestionIndex >= questions.length) {
+            return;
+        }
+
         const selectedOption = document.querySelector(`input[name="question-${currentQuestionIndex}"]:checked`);
         if (selectedOption) {
             userAnswers[currentQuestionIndex] = selectedOption.value;
         } else {
-            userAnswers[currentQuestionIndex] = null; // Or some other indicator for unanswered
+            userAnswers[currentQuestionIndex] = null;
         }
 
         currentQuestionIndex++;
@@ -147,10 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showResults() {
-        quizContainer.innerHTML = ''; // Clear last question
-        quizContainer.style.display = 'none'; // Hide quiz area
-        resultsContainer.innerHTML = ''; // Clear previous results
-        resultsContainer.style.display = 'block'; // Show results area
+        if (questionTimerInterval) {
+            clearInterval(questionTimerInterval);
+            questionTimerInterval = null;
+        }
+        quizContainer.innerHTML = '';
+        quizContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+        resultsContainer.style.display = 'block';
 
         let score = 0;
         userAnswers.forEach((answer, index) => {
@@ -165,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         questions.forEach((questionData, index) => {
             const resultItem = document.createElement('div');
-            resultItem.classList.add('result-item', 'question-item'); // Reuse question-item styling
+            resultItem.classList.add('result-item', 'question-item');
 
             const questionText = document.createElement('p');
             questionText.innerHTML = `<strong>${index + 1}. ${questionData.question}</strong>`;
@@ -178,11 +230,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const userAnswerText = document.createElement('p');
-            const userAnswerDisplay = userAnswers[index] ? `${userAnswers[index]}) ${questionData.options[userAnswers[index]]}` : 'Unanswered';
+            const userAnswerDisplay = userAnswers[index] ? `${userAnswers[index]}) ${questionData.options[userAnswers[index]]}` : 'Unanswered (Time up or no selection)';
             userAnswerText.innerHTML = `Your answer: <span class="${userAnswers[index] === questionData.correct ? 'correct' : 'incorrect'}">${userAnswerDisplay}</span>`;
             resultItem.appendChild(userAnswerText);
 
-            if (userAnswers[index] !== questionData.correct) {
+            if (userAnswers[index] !== questionData.correct && userAnswers[index] !== null) {
                 const correctAnswerText = document.createElement('p');
                 correctAnswerText.innerHTML = `Correct answer: <span class="correct">${questionData.correct}) ${questionData.options[questionData.correct]}</span>`;
                 resultItem.appendChild(correctAnswerText);
@@ -198,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const explanationDiv = document.createElement('div');
             explanationDiv.id = `explanation-${index}`;
             explanationDiv.classList.add('explanation');
-            explanationDiv.style.display = 'none'; // Initially hidden
+            explanationDiv.style.display = 'none';
             resultItem.appendChild(explanationDiv);
 
             resultsContainer.appendChild(resultItem);
@@ -213,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
             topicInput.value = '';
             numQuestionsInput.value = '5';
             levelSelect.value = 'beginner';
+            if (questionTimerInterval) clearInterval(questionTimerInterval);
         });
         resultsContainer.appendChild(tryAgainButton);
     }
@@ -223,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const explanationDiv = document.getElementById(`explanation-${questionIndex}`);
 
         if (explanationDiv.style.display === 'block' && explanationDiv.innerHTML !== 'Loading explanation...') {
-            explanationDiv.style.display = 'none'; // Toggle off
+            explanationDiv.style.display = 'none';
             button.textContent = 'Show Explanation';
             return;
         }
@@ -235,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const explanationRequestData = {
             topic: quizTopic,
             level: quizLevel,
-            num_questions: quizNumQuestions, // Use the actual number of questions in the current quiz
+            num_questions: quizNumQuestions,
             question_index: questionIndex
         };
 
